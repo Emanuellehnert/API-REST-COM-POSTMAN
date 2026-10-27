@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, request
 from flask_migrate import Migrate
 from db import db
 load_dotenv()
@@ -9,24 +9,39 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 migrate = Migrate(app, db)
+with app.app_context():
+    from models.book import Book
+    db.create_all()
+    if Book.query.count() == 0:
+        livro1 = Book(
+            title="O Hobbit",
+            author="J.R.R. Tolkien",
+            description="Uma aventura pela Terra Média.",
+            is_reading=True,
+            is_finished=False,
+            is_favorite=True
+        )
+        livro2 = Book(
+            title="Dom Casmurro",
+            author="Machado de Assis",
+            description="Clássico da literatura brasileira.",
+            is_finished=True
+        )
+        db.session.add(livro1)
+        db.session.add(livro2)
+        db.session.commit()
 @app.route("/", methods=["GET"])
 def inicio():
-    return {
-        "mensagem": "API funcionando!",
-        "status": "sucesso"
-    }, 200
-if __name__ == "__main__":
-    app.run(debug=True)
+    from models.book import Book
+    livros = Book.query.all()
+    return {"livros": [livro.to_dict() for livro in livros]}, 200
 @app.route("/livros", methods=["GET"])
 def listar_livros():
     from models.book import Book
     livros = Book.query.all()
-    return {
-        "livros": [livro.to_dict() for livro in livros]
-    }, 200
+    return {"livros": [livro.to_dict() for livro in livros]}, 200
 @app.route("/livros", methods=["POST"])
 def criar_livro():
-    from flask import request
     from models.book import Book
     dados = request.get_json()
     novo_livro = Book(
@@ -39,11 +54,10 @@ def criar_livro():
     )
     db.session.add(novo_livro)
     db.session.commit()
-    return {
-        "mensagem": "Livro criado com sucesso!",
-        "livro": novo_livro.to_dict()
-    }, 201
-app.route("/livros/<uuid:livro_id>", methods=["GET"])
+    return novo_livro.to_dict(), 201
+if __name__ == "__main__":
+    app.run(debug=True)
+@app.route("/livros/<uuid:livro_id>", methods=["GET"])
 def obter_livro(livro_id):
     from models.book import Book
     livro = Book.query.get_or_404(livro_id)
